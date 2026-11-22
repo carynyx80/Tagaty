@@ -42,5 +42,9 @@ export const MOCK = (() => {
 
 export const api: PrimarApi = MOCK ? mockApi : realApi;
 
-export const explorerTx = (sig: string) => `https://explorer.solana.com/tx/${sig}?cluster=devnet`;
+let currentNetwork = "devnet";
+/** Called once the relayer reports its network, so explorer links match it. */
+export const setNetwork = (n: string) => { currentNetwork = n; };
+export const explorerTx = (sig: string) =>
+  `https://explorer.solana.com/tx/${sig}${currentNetwork === "mainnet" ? "" : `?cluster=${currentNetwork}`}`;
 export const short = (a: string) => (a ? `${a.slice(0, 4)}…${a.slice(-4)}` : "");

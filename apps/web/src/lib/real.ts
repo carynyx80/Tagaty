@@ -3,6 +3,7 @@ import {
   parsePaymentBody, unb64, shortAddress, verifyProfile, type Opened,
 } from "@primar/core";
 import type { PrimarApi, Chat, Message, Profile, Status } from "../api";
+import { setNetwork } from "../api";
 import { getSession, getSigner, setIdentity, disconnect as endSession } from "./session";
 
 export const RELAYER: string =
@@ -202,6 +203,7 @@ export const realApi: PrimarApi = {
       http<{ mode: "onchain" | "local"; network: string }>("/v1/health").catch(() => null),
       http<{ enabled: boolean; reason?: string }>("/v1/rings/status").catch(() => ({ enabled: false, reason: "Relayer unreachable" })),
     ]);
+    if (health?.network) setNetwork(health.network);
     return { network: health?.network ?? "devnet", mode: health ? health.mode : "offline", rings };
   },
 

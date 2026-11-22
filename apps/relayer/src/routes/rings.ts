@@ -46,6 +46,9 @@ async function status() {
   if (!process.env.HELIUS_API_KEY) {
     return { enabled: false, network: net, reason: "HELIUS_API_KEY not set (Privacy Rings needs a Helius RPC)" };
   }
+  if (net === "mainnet" && process.env.RINGS_MAINNET_ENABLED !== "1") {
+    return { enabled: false, network: net, reason: "Private payments are paused on mainnet until a live test payment succeeds" };
+  }
   const signer = await loadSigner();
   if (!signer) return { enabled: false, network: net, reason: "relayer keypair missing or invalid" };
   return { enabled: true, network: net, feePayer: signer.address as string };

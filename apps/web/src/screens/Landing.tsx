@@ -66,7 +66,7 @@ export default function Landing() {
       <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-5 py-5">
         <Logo />
         <div className="flex items-center gap-2 text-xs">
-          <span className="hidden rounded-full border border-accent/50 px-3 py-1 font-semibold text-accent sm:inline">Devnet</span>
+          <span className="hidden rounded-full border border-accent/50 px-3 py-1 font-semibold text-accent sm:inline">Live on Solana</span>
           <Pill variant="ghost" onClick={() => (MOCK || hasIdentity() ? go("app") : connect())} className="px-4 py-2 text-sm">
             Open app <ArrowRight size={14} />
           </Pill>
