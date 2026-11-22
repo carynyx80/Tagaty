@@ -1,5 +1,5 @@
 import {
-  setupMessagingIdentity, verifyRegistration, sealMessage, openMessage, checkSender, reassemble, signProfile,
+  setupMessagingIdentity, verifyRegistration, sealMessage, sealSelfCopy, newMessageId, openMessage, checkSender, reassemble, signProfile,
   parsePaymentBody, unb64, shortAddress, verifyProfile, type Opened,
 } from "@primar/core";
 import type { PrimarApi, Chat, Message, Profile, Status } from "../api";
@@ -75,6 +75,8 @@ function getKey(wallet: string): Promise<KeyRecord | null> {
 const pending: Opened[] = [];
 const partSig = new Map<string, string | null>();
 
+const partKey = (p: { from: string; id: string; to?: string }) => `${p.from}:${p.id}:${p.to ?? ""}`;
+
 async function ingest(items: Item[]) {
   const s = getSession();
   if (!s?.secret) return;
@@ -85,15 +87,27 @@ async function ingest(items: Item[]) {
     if (!opened) continue;
     const rec = await getKey(opened.from).catch(() => null);
     if (!checkSender(opened, rec)) continue;
+    // Self-copies (from me, with `to`) are my own sent messages; ignore any other envelope "from me".
+    if (opened.from === s.wallet && !opened.to) continue;
     pending.push(opened);
-    const k = `${opened.from}:${opened.id}`;
+    const k = partKey(opened);
     if (!partSig.has(k) || opened.part === 0) partSig.set(k, it.signature);
   }
   for (const m of reassemble(pending)) {
-    const id = `${m.from}:${m.id}`;
-    for (let i = pending.length - 1; i >= 0; i--) if (`${pending[i].from}:${pending[i].id}` === id) pending.splice(i, 1);
+    const k = partKey(m);
+    for (let i = pending.length - 1; i >= 0; i--) if (partKey(pending[i]) === k) pending.splice(i, 1);
+    const mine = m.from === s.wallet && !!m.to;
+    const id = mine ? `me:${m.id}` : `${m.from}:${m.id}`;
     if (store.messages.some((x) => x.id === id)) continue;
-    store.messages.push({ id, other: m.from, fromMe: false, kind: m.kind === "payment" ? "payment" : "text", body: m.body, ts: m.ts, sig: partSig.get(id) ?? null });
+    store.messages.push({
+      id,
+      other: mine ? m.to! : m.from,
+      fromMe: mine,
+      kind: m.kind === "payment" ? "payment" : "text",
+      body: m.body,
+      ts: m.ts,
+      sig: partSig.get(k) ?? null,
+    });
     changed = true;
   }
   if (changed) store.messages.sort((a, b) => a.ts - b.ts);
@@ -255,14 +269,29 @@ export const realApi: PrimarApi = {
     if (!s?.secret) throw new Error("Not signed in");
     const rec = await getKey(chatId);
     if (!rec) throw new Error("This wallet hasn't joined Pispt yet.");
-    const wires = sealMessage({ senderWallet: s.wallet, senderSecret: s.secret, recipientMsgPub: unb64(rec.msgPub), text: body });
+    const msgId = newMessageId();
+    const ts = Date.now();
+    const wires = sealMessage({ senderWallet: s.wallet, senderSecret: s.secret, recipientMsgPub: unb64(rec.msgPub), text: body, id: msgId, ts });
     let first: { id: string; signature: string | null; ts: number } | null = null;
     for (const envelope of wires) {
       const r = await http<{ id: string; signature: string | null; ts: number }>("/v1/messages", { method: "POST", body: JSON.stringify({ envelope }) });
       first ??= r;
     }
+    // Self-copy (sealed to my own key, tagged `to`) so any device I sign in on can recover this sent message.
+    try {
+      const myPub = s.msgPub ?? (await getKey(s.wallet))?.msgPub;
+      if (myPub) {
+        const copies = sealSelfCopy({ senderWallet: s.wallet, senderSecret: s.secret, senderMsgPub: unb64(myPub), recipientWallet: chatId, text: body, id: msgId, ts });
+        for (const envelope of copies) await http("/v1/messages", { method: "POST", body: JSON.stringify({ envelope }) });
+      }
+    } catch (e) {
+      console.warn("Pispt: self-copy failed (message was still sent)", e);
+    }
     const st = loadStore();
-    const stored: Stored = { id: `me:${first!.id}`, other: chatId, fromMe: true, kind: "text", body, ts: first!.ts || Date.now(), sig: first!.signature };
+    const id = `me:${msgId}`;
+    const existing = st.messages.find((x) => x.id === id);
+    if (existing) return toMessage(existing);
+    const stored: Stored = { id, other: chatId, fromMe: true, kind: "text", body, ts, sig: first!.signature };
     st.messages.push(stored);
     st.read[chatId] = Date.now();
     saveStore();

@@ -225,9 +225,19 @@ export type Opened = {
   ts: number;
   kind: 'text' | 'payment';
   body: string;
+  /** Present only on self-copies: the wallet the original message was sent to. */
+  to?: string;
 };
 
 type Inner = Opened & { v: 1; auth: string };
+
+/** Fresh 16-hex-char message id. */
+export function newMessageId(): string {
+  return bytesToHex(randomBytes(8));
+}
+
+/** Max length of a base58 Solana address; `to` is always budgeted at this size so self-copies chunk identically. */
+const MAX_ADDR_LEN = 44;
 
 function computeAuth(senderSecret: Uint8Array, recipientPub: Uint8Array, E: Uint8Array, id: string, part: number) {
   const k = x25519.getSharedSecret(senderSecret, recipientPub);
@@ -247,6 +257,7 @@ function serializeInner(inner: Inner): Uint8Array {
       ts: inner.ts,
       kind: inner.kind,
       body: inner.body,
+      ...(inner.to !== undefined ? { to: inner.to } : {}),
       auth: inner.auth,
     }),
   );
@@ -300,9 +311,41 @@ function splitBody(body: string, budget: number): string[] {
   return chunks;
 }
 
+/** Split `text` into bodies; budget always reserves room for a max-length `to` field. */
+function planChunks(args: { senderWallet: string; fromMsgPub: string; id: string; ts: number; kind: Kind; text: string }): string[] {
+  let digits = 3;
+  for (;;) {
+    const maxNum = Number('9'.repeat(digits));
+    const overhead = serializeInner({
+      v: 1,
+      from: args.senderWallet,
+      fromMsgPub: args.fromMsgPub,
+      id: args.id,
+      part: maxNum,
+      total: maxNum,
+      ts: args.ts,
+      kind: args.kind,
+      body: '',
+      to: 'A'.repeat(MAX_ADDR_LEN),
+      auth: 'A'.repeat(44),
+    }).length;
+    const chunks = splitBody(args.text, MAX_INNER - overhead);
+    if (chunks.length > maxNum) {
+      digits++;
+      continue;
+    }
+    return chunks;
+  }
+}
+
+function checkId(id: string) {
+  if (!/^[0-9a-f]{16}$/.test(id)) throw new Error('id must be 16 lowercase hex chars');
+}
+
 /**
  * Encrypt (and chunk) a message to a recipient. Returns one or more wire strings
  * (`"PRM1:" + base64`), each ≤ 700 chars. Parts share `id`; `part` is 0-based.
+ * Pass `id`/`ts` (e.g. from `newMessageId()` / `Date.now()`) to pair with `sealSelfCopy`.
  */
 export function sealMessage(args: {
   senderWallet: string;
@@ -310,42 +353,51 @@ export function sealMessage(args: {
   recipientMsgPub: Uint8Array;
   text: string;
   kind?: Kind;
+  id?: string;
+  ts?: number;
 }): string[] {
   const { senderWallet, senderSecret, recipientMsgPub, text } = args;
   const kind: Kind = args.kind ?? 'text';
   if (recipientMsgPub.length !== 32) throw new Error('recipientMsgPub must be 32 bytes');
   if (senderSecret.length !== 32) throw new Error('senderSecret must be 32 bytes');
   const fromMsgPub = b64(x25519.getPublicKey(senderSecret));
-  const id = bytesToHex(randomBytes(8));
-  const ts = Date.now();
+  const id = args.id ?? newMessageId();
+  checkId(id);
+  const ts = args.ts ?? Date.now();
+  const chunks = planChunks({ senderWallet, fromMsgPub, id, ts, kind, text });
+  const total = chunks.length;
+  return chunks.map((body, part) =>
+    sealOne({ v: 1, from: senderWallet, fromMsgPub, id, part, total, ts, kind, body }, senderSecret, recipientMsgPub),
+  );
+}
 
-  // Compute body budget using worst-case part/total digits, then fall back if the
-  // number of parts is larger than assumed.
-  let digits = 3;
-  for (;;) {
-    const maxNum = Number('9'.repeat(digits));
-    const overhead = serializeInner({
-      v: 1,
-      from: senderWallet,
-      fromMsgPub,
-      id,
-      part: maxNum,
-      total: maxNum,
-      ts,
-      kind,
-      body: '',
-      auth: 'A'.repeat(44),
-    }).length;
-    const chunks = splitBody(text, MAX_INNER - overhead);
-    if (chunks.length > maxNum) {
-      digits++;
-      continue;
-    }
-    const total = chunks.length;
-    return chunks.map((body, part) =>
-      sealOne({ v: 1, from: senderWallet, fromMsgPub, id, part, total, ts, kind, body }, senderSecret, recipientMsgPub),
-    );
-  }
+/**
+ * Seal a copy of an outgoing message to the sender's OWN messaging key, tagged with
+ * `to = recipientWallet`, using the same id/ts/parts as the outgoing message. Lets the
+ * sender recover sent history on any device by scanning the relayer.
+ */
+export function sealSelfCopy(args: {
+  senderWallet: string;
+  senderSecret: Uint8Array;
+  senderMsgPub: Uint8Array;
+  recipientWallet: string;
+  text: string;
+  kind?: Kind;
+  id: string;
+  ts: number;
+}): string[] {
+  const { senderWallet, senderSecret, senderMsgPub, recipientWallet, text, id, ts } = args;
+  const kind: Kind = args.kind ?? 'text';
+  if (senderMsgPub.length !== 32) throw new Error('senderMsgPub must be 32 bytes');
+  if (senderSecret.length !== 32) throw new Error('senderSecret must be 32 bytes');
+  if (!recipientWallet || recipientWallet.length > MAX_ADDR_LEN) throw new Error('invalid recipientWallet');
+  checkId(id);
+  const fromMsgPub = b64(senderMsgPub);
+  const chunks = planChunks({ senderWallet, fromMsgPub, id, ts, kind, text });
+  const total = chunks.length;
+  return chunks.map((body, part) =>
+    sealOne({ v: 1, from: senderWallet, fromMsgPub, id, part, total, ts, kind, body, to: recipientWallet }, senderSecret, senderMsgPub),
+  );
 }
 
 function isValidInner(x: unknown): x is Inner {
@@ -366,6 +418,7 @@ function isValidInner(x: unknown): x is Inner {
     Number.isFinite(o.ts) &&
     (o.kind === 'text' || o.kind === 'payment') &&
     typeof o.body === 'string' &&
+    (o.to === undefined || typeof o.to === 'string') &&
     typeof o.auth === 'string'
   );
 }
@@ -412,6 +465,7 @@ export function openMessage(args: { wire: string; mySecret: Uint8Array }): Opene
       ts: inner.ts,
       kind: inner.kind,
       body: inner.body,
+      ...(typeof inner.to === 'string' ? { to: inner.to } : {}),
     };
   } catch {
     return null;
@@ -434,16 +488,16 @@ export function checkSender(
  * Group opened parts into full messages (by sender + id). Only messages whose parts
  * 0..total-1 are all present are returned; duplicates are ignored. Sorted by ts asc.
  */
-export function reassemble(parts: Opened[]): { id: string; from: string; ts: number; kind: string; body: string }[] {
+export function reassemble(parts: Opened[]): { id: string; from: string; ts: number; kind: string; body: string; to?: string }[] {
   const groups = new Map<string, Opened[]>();
   for (const p of parts) {
     if (!p) continue;
-    const key = p.from + '\u0000' + p.fromMsgPub + '\u0000' + p.id;
+    const key = p.from + '\u0000' + p.fromMsgPub + '\u0000' + p.id + '\u0000' + (p.to ?? '');
     let g = groups.get(key);
     if (!g) groups.set(key, (g = []));
     g.push(p);
   }
-  const out: { id: string; from: string; ts: number; kind: string; body: string }[] = [];
+  const out: { id: string; from: string; ts: number; kind: string; body: string; to?: string }[] = [];
   for (const g of groups.values()) {
     const total = g[0]!.total;
     const byPart = new Map<number, Opened>();
@@ -452,7 +506,7 @@ export function reassemble(parts: Opened[]): { id: string; from: string; ts: num
     let body = '';
     for (let i = 0; i < total; i++) body += byPart.get(i)!.body;
     const first = byPart.get(0)!;
-    out.push({ id: first.id, from: first.from, ts: first.ts, kind: first.kind, body });
+    out.push({ id: first.id, from: first.from, ts: first.ts, kind: first.kind, body, ...(first.to !== undefined ? { to: first.to } : {}) });
   }
   out.sort((a, b) => a.ts - b.ts);
   return out;
