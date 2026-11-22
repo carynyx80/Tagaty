@@ -106,7 +106,7 @@ export default function Landing() {
               )}
             </motion.div>
             {TOKEN_LIVE && (
-              <motion.div variants={fadeUp} className="mt-5 flex justify-center px-2">
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.5 }} className="mt-5 flex justify-center px-2">
                 <TokenCA />
               </motion.div>
             )}
