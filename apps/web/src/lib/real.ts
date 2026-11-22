@@ -5,6 +5,7 @@ import {
 import type { PrimarApi, Chat, Message, Profile, Status } from "../api";
 import { setNetwork } from "../api";
 import { getSession, getSigner, setIdentity, disconnect as endSession } from "./session";
+import { sendPaymentEnvelope } from "./payments";
 
 export const RELAYER: string =
   (import.meta.env.VITE_RELAYER_URL as string | undefined) ??
@@ -299,9 +300,13 @@ export const realApi: PrimarApi = {
     return toMessage(stored);
   },
 
-  async sendPayment() {
-    // TODO: wire @primar/rings client once Helius Privacy Rings is enabled on the relayer.
-    throw new Error("Private payments switch on once the Helius Privacy Rings key is configured.");
+  async sendPayment(chatId) {
+    // Announces a Rings transfer already confirmed by lib/payments.ts (throws if there is none).
+    const sent = await sendPaymentEnvelope(chatId);
+    const st = loadStore();
+    const stored: Stored = { id: `me:${sent.id}`, other: chatId, fromMe: true, kind: "payment", body: sent.body, ts: sent.ts, sig: sent.ringsSignature };
+    if (!st.messages.some((x) => x.id === stored.id)) { st.messages.push(stored); st.read[chatId] = Date.now(); saveStore(); emit(); }
+    return toMessage(stored);
   },
 
   async startChat(address) {

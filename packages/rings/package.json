@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
     "./sponsor": "./src/sponsor.ts",
-    "./constants": "./src/constants.ts"
+    "./constants": "./src/constants.ts",
+    "./directory": "./src/directory.ts"
   },
   "scripts": {
     "test": "vitest run",

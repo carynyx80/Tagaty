@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import Logo from "../components/Logo";
 import ProfileForm from "../components/ProfileForm";
+import PaymentModal from "../components/PaymentModal";
 import { go } from "../App";
 import { api, explorerTx, short, type Chat, type Message, type Profile, type Status } from "../api";
 import { getSession } from "../lib/session";
@@ -407,12 +408,11 @@ export default function ChatApp() {
         )}
       </AnimatePresence>
       {showPay && active && (
-        <PayModal
-          to={active}
-          profile={profiles[active.address]}
+        <PaymentModal
+          toAddress={active.address}
+          toName={nameOf(active, profiles[active.address])}
           onClose={() => setShowPay(false)}
-          enabled={status?.rings.enabled ?? false}
-          onSend={async (amt, tok, note) => { await api.sendPayment(activeId, amt, tok, note); await refresh(); setShowPay(false); }}
+          onPaid={async (note) => { await api.sendPayment(activeId, 0, "SOL"); if (note) await api.sendText(activeId, note); await refresh(); }}
         />
       )}
     </div>
@@ -511,61 +511,5 @@ function EditProfilePanel({ profile, address, onClose, onSaved }: { profile: Pro
         <ProfileForm key={profile?.updatedAt ?? 0} initial={profile} submitLabel="Save changes" onSaved={onSaved} />
       </motion.aside>
     </motion.div>
-  );
-}
-
-function PayModal({ to, profile, enabled, onClose, onSend }: { to: Chat; profile?: Profile | null; enabled: boolean; onClose: () => void; onSend: (a: number, t: "SOL" | "USDC", note?: string) => Promise<void> }) {
-  const [amount, setAmount] = useState("0.5");
-  const [token, setToken] = useState<"SOL" | "USDC">("SOL");
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const n = parseFloat(amount);
-  return (
-    <Modal title="Send private payment" onClose={onClose}>
-      {!enabled && (
-        <div className="mb-4 flex gap-2.5 rounded-2xl border border-edge bg-panel p-3.5 text-xs leading-relaxed text-white/70">
-          <Info size={14} className="mt-0.5 shrink-0 text-accent" />
-          Private payments switch on once the Helius Privacy Rings key is configured.
-        </div>
-      )}
-      <fieldset disabled={!enabled} className={enabled ? "" : "opacity-50"}>
-      <div className="mb-4 flex items-center gap-3 rounded-2xl border border-line bg-panel p-3">
-        <Avatar chat={to} profile={profile} size={32} />
-        <div className="text-sm"><div className="font-medium text-fg">{nameOf(to, profile)}</div><div className="font-mono text-[11px] text-muted">{subOf(to, profile)}</div></div>
-      </div>
-      <div className="flex gap-2">
-        <input
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          inputMode="decimal"
-          className="w-full rounded-2xl border border-line bg-panel px-4 py-3 font-display text-3xl font-extrabold text-fg outline-none focus:border-accent/50"
-        />
-        <div className="flex rounded-full border border-line bg-panel p-1">
-          {(["SOL", "USDC"] as const).map((t) => (
-            <button key={t} onClick={() => setToken(t)} className={`rounded-full px-3 text-sm font-bold ${token === t ? "bg-accent text-black" : "text-muted"}`}>{t}</button>
-          ))}
-        </div>
-      </div>
-      <input
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="Add an encrypted note (optional)"
-        className="mt-3 w-full rounded-2xl border border-line bg-panel px-4 py-3 text-sm outline-none focus:border-accent/50"
-      />
-      <div className="mt-4 space-y-1.5 rounded-2xl border border-accent/50 p-3 text-xs text-fg">
-        <div className="flex items-center gap-2"><EyeOff size={13} className="text-accent" /> Amount encrypted on Solana via <span className="font-semibold text-accent">Helius Privacy Rings</span></div>
-        <div className="flex items-center gap-2"><Fuel size={13} className="text-accent" /> Gas paid by Pispt</div>
-      </div>
-      <button
-        disabled={!enabled || !(n > 0) || busy}
-        onClick={async () => { setBusy(true); setErr(null); try { await onSend(n, token, note || undefined); } catch (e) { setErr(e instanceof Error ? e.message : "Payment failed"); } finally { setBusy(false); } }}
-        className="bg-grad mt-5 flex w-full items-center justify-center gap-2 rounded-full py-3.5 font-bold text-black transition hover:scale-[1.02] active:scale-95 disabled:opacity-40"
-      >
-        {busy ? <Loader2 size={18} className="animate-spin" /> : <Lock size={16} />} Send {n > 0 ? n : ""} {token} privately
-      </button>
-      </fieldset>
-      {err && <div className="mt-3 flex items-center gap-2 text-xs text-red-400"><AlertCircle size={13} /> {err}</div>}
-    </Modal>
   );
 }

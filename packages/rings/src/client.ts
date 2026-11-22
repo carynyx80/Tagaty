@@ -26,8 +26,16 @@ import {
   type WalletKeys,
 } from "@heliuslabs/spr";
 import { SignedTeePolicy, type SprClient } from "@heliuslabs/spr/client";
+import { isWalletRegistered } from "@heliuslabs/spr/wallet";
 import {
+  AccountRole,
   address,
+  appendTransactionMessageInstruction,
+  compileTransaction,
+  createTransactionMessage,
+  pipe,
+  setTransactionMessageFeePayer,
+  setTransactionMessageLifetimeUsingBlockhash,
   getBase64EncodedWireTransaction,
   partiallySignTransactionWithSigners,
   type Address,
@@ -35,7 +43,7 @@ import {
   type Transaction,
   type TransactionPartialSigner,
 } from "@solana/kit";
-import { RINGS_DERIVE_MESSAGE, SPR_ENDPOINTS, type RingsNetwork } from "./constants.js";
+import { RINGS_DERIVE_MESSAGE, SPR_ENDPOINTS, SYSTEM_PROGRAM_ID, type RingsNetwork } from "./constants.js";
 
 // ---------------------------------------------------------------------------------------------
 // Relayer status
@@ -72,23 +80,42 @@ export async function getRingsStatus(relayerUrl: string): Promise<RingsStatus> {
 
 export interface CreateRingsClientArgs {
   network: RingsNetwork;
-  /** e.g. https://devnet.helius-rpc.com/?api-key=KEY. A browser app should use a proxy or a
-   *  restricted key; never ship the relayer's key. */
-  solanaRpcUrl: string;
+  /** Direct mode: e.g. https://devnet.helius-rpc.com/?api-key=KEY (Node / scripts only). */
+  solanaRpcUrl?: string;
+  /** Browser mode: route RPC, indexer and prover through the Pispt relayer's /v1/rings proxy,
+   *  so no Helius key ships to the browser. All secrets still stay client-side. */
+  relayerUrl?: string;
   indexerUrl?: string;
   proverUrl?: string;
   apiKey?: string;
+  /** Custom fetch for every SDK HTTP request (e.g. an IP-hiding mixnet transport). */
+  fetch?: typeof globalThis.fetch;
 }
 
 export async function createRingsClient(args: CreateRingsClientArgs): Promise<SprClient> {
+  // proverTee is required for every remote prover: the SDK attests the Nitro enclave and
+  // HPKE-encrypts each prover request to it, so a proxy in between can't read proof inputs.
+  const proverTee = SignedTeePolicy.forNetwork(args.network);
+  if (args.relayerUrl) {
+    const base = `${trimSlash(args.relayerUrl)}/v1/rings`;
+    return createSprClient({
+      solanaRpcUrl: `${base}/rpc`,
+      indexerUrl: args.indexerUrl ?? `${base}/spr`,
+      proverUrl: args.proverUrl ?? `${base}/spr`,
+      proverTee,
+      ...(args.fetch ? { fetch: args.fetch } : {}),
+    });
+  }
+  if (!args.solanaRpcUrl) throw new Error("createRingsClient needs relayerUrl or solanaRpcUrl");
+  // Helius RPC roots serve indexer + prover under /v1/spr (SDK endpoint.js); else README endpoints.
+  const helius = /(^|\.)helius-rpc\.com$/.test(new URL(args.solanaRpcUrl).hostname);
   const ep = SPR_ENDPOINTS[args.network];
-  // UNVERIFIED live: endpoints come from the SDK README; proverTee is required for remote provers.
   return createSprClient({
     solanaRpcUrl: args.solanaRpcUrl,
-    indexerUrl: args.indexerUrl ?? ep.indexerUrl,
-    proverUrl: args.proverUrl ?? ep.proverUrl,
+    ...(args.indexerUrl || !helius ? { indexerUrl: args.indexerUrl ?? ep.indexerUrl } : {}),
+    ...(args.proverUrl || !helius ? { proverUrl: args.proverUrl ?? ep.proverUrl } : {}),
     ...(args.apiKey ? { apiKey: args.apiKey } : {}),
-    proverTee: SignedTeePolicy.forNetwork(args.network),
+    proverTee,
   });
 }
 
@@ -188,6 +215,83 @@ export async function registerForRings(ctx: RingsContext): Promise<{ signature: 
   const { signature } = await submitSponsored(ctx.relayerUrl, await userSign(tx, [ctx.account.signer]));
   await ctx.client.confirmTransaction(signature);
   return { signature };
+}
+
+export async function isRegisteredForRings(ctx: Pick<RingsContext, "client" | "account">): Promise<boolean> {
+  return isWalletRegistered({ rpc: ctx.client, owner: ctx.account.owner });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Funding the Rings owner from the user's main wallet (two-step deposit).
+//
+// SPR builds version-1 transactions, which browser wallets may not sign yet. So "Add funds" is:
+//   1. a plain legacy System transfer main wallet -> Rings owner (signed by the main wallet,
+//      fee paid by the relayer), then
+//   2. a Rings deposit of that SOL, signed in-browser by the Rings owner key (fee: relayer).
+// If step 2 fails the SOL simply sits at the Rings owner address: retry the deposit or sweep it
+// back with buildSweepToWalletTransaction. Both steps are PUBLIC on-chain.
+
+/** Minimum first top-up: a new system account must stay rent-exempt (~0.00089 SOL). */
+export const MIN_TOPUP_LAMPORTS = 1_000_000n;
+
+function systemTransferIx(from: Address, to: Address, lamports: bigint) {
+  const data = new Uint8Array(12);
+  const dv = new DataView(data.buffer);
+  dv.setUint32(0, 2, true); // SystemInstruction::Transfer
+  dv.setBigUint64(4, lamports, true);
+  return {
+    programAddress: address(SYSTEM_PROGRAM_ID),
+    accounts: [
+      { address: from, role: AccountRole.WRITABLE_SIGNER },
+      { address: to, role: AccountRole.WRITABLE },
+    ],
+    data,
+  };
+}
+
+async function legacyTransferTx(client: SprClient, feePayer: Address, from: Address, to: Address, lamports: bigint): Promise<Transaction> {
+  const { value: lifetime } = await client.solanaRpc.getLatestBlockhash({ commitment: "confirmed" }).send();
+  const msg = pipe(
+    createTransactionMessage({ version: "legacy" }),
+    (m) => setTransactionMessageFeePayer(feePayer, m),
+    (m) => setTransactionMessageLifetimeUsingBlockhash(lifetime, m),
+    (m) => appendTransactionMessageInstruction(systemTransferIx(from, to, lamports), m),
+  );
+  return compileTransaction(msg);
+}
+
+/** Step 1: unsigned legacy tx moving `lamports` from the main wallet to the Rings owner. */
+export async function buildTopUpTransaction(args: { ctx: RingsContext; from: Address | string; lamports: bigint }): Promise<Transaction> {
+  return legacyTransferTx(args.ctx.client, address(String(args.ctx.feePayer)), address(String(args.from)), args.ctx.account.owner, args.lamports);
+}
+
+/** Recovery: move SOL sitting at the Rings owner address back to a wallet (owner signs in-browser). */
+export async function buildSweepToWalletTransaction(args: { ctx: RingsContext; to: Address | string; lamports: bigint }): Promise<SponsorableTx> {
+  const tx = await legacyTransferTx(args.ctx.client, address(String(args.ctx.feePayer)), args.ctx.account.owner, address(String(args.to)), args.lamports);
+  return userSign(tx, [args.ctx.account.signer]);
+}
+
+/** Public SOL balance of the Rings owner address (funds topped up but not yet deposited). */
+export async function getOwnerPublicBalance(ctx: Pick<RingsContext, "client" | "account">): Promise<bigint> {
+  return ctx.client.getBalance(ctx.account.owner);
+}
+
+/** Wrap a transaction already signed elsewhere (e.g. by a Wallet Standard wallet). */
+export function toSponsorable(transaction: Transaction): SponsorableTx {
+  return { transaction, wireBase64: getBase64EncodedWireTransaction(transaction) };
+}
+
+/** Wait until a sponsored legacy/v0 tx is confirmed (polls signature status through the RPC). */
+export async function waitForConfirmation(client: SprClient, signature: Signature, timeoutMs = 60_000): Promise<void> {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    const { value } = await client.solanaRpc.getSignatureStatuses([signature]).send();
+    const st = value[0];
+    if (st?.err) throw new Error(`transaction failed on-chain: ${JSON.stringify(st.err, (_k, v) => (typeof v === "bigint" ? v.toString() : v))}`);
+    if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) return;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  throw new Error("timed out waiting for confirmation");
 }
 
 // ---------------------------------------------------------------------------------------------

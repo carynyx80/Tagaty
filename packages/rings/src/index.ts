@@ -4,3 +4,4 @@
 export * from "./constants.js";
 export * from "./client.js";
 export * from "./sponsor.js";
+export * from "./directory.js";
