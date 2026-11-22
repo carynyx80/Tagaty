@@ -5,7 +5,9 @@ import {
 import type { PrimarApi, Chat, Message, Profile, Status } from "../api";
 import { getSession, getSigner, setIdentity, disconnect as endSession } from "./session";
 
-export const RELAYER: string = (import.meta.env.VITE_RELAYER_URL as string | undefined) ?? "http://127.0.0.1:8787";
+export const RELAYER: string =
+  (import.meta.env.VITE_RELAYER_URL as string | undefined) ??
+  (location.hostname.endsWith("pispt.xyz") ? "https://api.pispt.xyz" : "http://127.0.0.1:8787");
 
 type KeyRecord = { wallet: string; msgPub: string; sig: string };
 type Item = { id: string; envelope: string; signature: string | null; ts: number };

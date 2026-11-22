@@ -76,6 +76,7 @@ export default function Landing() {
       <main className="relative z-10">
         <section className="mx-auto max-w-7xl px-5 pb-20 pt-14 text-center sm:pt-20">
           <Reveal>
+            <motion.img variants={fadeUp} src="/logo.jpg" alt="Pispt logo" className="mx-auto mb-6 h-36 w-36 object-cover mix-blend-screen [mask-image:radial-gradient(circle,black_38%,transparent_62%)] sm:h-52 sm:w-52" />
             <motion.div variants={fadeUp} className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-accent/50 px-5 py-2 text-sm font-semibold text-fg">
               <span className="h-2 w-2 rounded-full bg-accent" />
               Powered by Helius Privacy Rings on Solana
@@ -86,7 +87,7 @@ export default function Landing() {
               Reveal <span className="italic text-grad">nothing.</span>
             </motion.h1>
             <motion.p variants={fadeUp} className="mx-auto mt-8 max-w-xl text-lg text-muted">
-              <span className="font-semibold text-fg">Pispt</span> is gas-free private messaging and payments. Your wallet is your identity — no phone number, no email, no seed phrase.
+              <span className="font-semibold text-fg">Pispt:</span> gas-free private messaging on Solana, powered by Helius Privacy Rings. Send and receive messages.
             </motion.p>
             <motion.div variants={fadeUp} className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Pill variant="accent" onClick={connect} className="w-full px-8 py-4 text-base sm:w-auto">
