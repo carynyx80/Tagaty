@@ -33,16 +33,16 @@ export const chats: Chat[] = [
   { id: "c3", label: "ops.sol", address: "Ops1kD7fHq3mZx9vN2cR5tY8uWb4eLa6sGj1pQiKoTnV", lastMessage: "Draft looks good, shipping tonight", time: "1h", unread: 1 },
   { id: "c4", label: "8fGk…Wm2a", address: "8fGkLp3sQ9rT1vXz5bN7cM2dH4jK6wY8eR0uIoPaWm2a", lastMessage: "ok 🤝", time: "3h", unread: 0 },
   { id: "c5", label: "satoshi-fan.sol", address: "SatF4n7qWe2rTy9uIo1pAs3dFg5hJk8lZx6cVb0nMqWe", lastMessage: "Read the paper again. Still holds.", time: "Yesterday", unread: 0 },
-  { id: "c6", label: "D3vR…n8Lc", address: "D3vRk2mP7qL9sX4tZ1wY6bN8cV3hJ5gF0eA2uIoKn8Lc", lastMessage: "Invoice settled — thanks", time: "Mon", unread: 0 },
+  { id: "c6", label: "D3vR…n8Lc", address: "D3vRk2mP7qL9sX4tZ1wY6bN8cV3hJ5gF0eA2uIoKn8Lc", lastMessage: "Invoice settled, thanks", time: "Mon", unread: 0 },
 ];
 
 export const messages: Message[] = [
-  { id: "m1", chatId: "c1", fromMe: false, kind: "text", body: "Hey — is this actually private? Like, nobody can see we're talking?", time: "10:41", sig: sig("a1") },
-  { id: "m2", chatId: "c1", fromMe: true, kind: "text", body: "Yep. Content is end-to-end encrypted, and each message lands in a one-time inbox — so on-chain it doesn't link you to me.", time: "10:42", sig: sig("b2") },
+  { id: "m1", chatId: "c1", fromMe: false, kind: "text", body: "Hey, is this actually private? Like, nobody can see we're talking?", time: "10:41", sig: sig("a1") },
+  { id: "m2", chatId: "c1", fromMe: true, kind: "text", body: "Yep. Content is end-to-end encrypted, and each message lands in a one-time inbox, so on-chain it doesn't link you to me.", time: "10:42", sig: sig("b2") },
   { id: "m3", chatId: "c1", fromMe: false, kind: "text", body: "And I didn't pay any gas for that?", time: "10:42", sig: sig("c3") },
   { id: "m4", chatId: "c1", fromMe: true, kind: "text", body: "Zero. The relayer covers it. Here, I owe you for dinner 👇", time: "10:43", sig: sig("d4") },
   { id: "m5", chatId: "c1", fromMe: true, kind: "payment", body: "Dinner 🍜", amount: 0.5, token: "SOL", time: "10:43", sig: sig("e5") },
-  { id: "m6", chatId: "c1", fromMe: false, kind: "text", body: "Got it. Amount's hidden on the explorer too — wild.", time: "10:44", sig: sig("f6") },
+  { id: "m6", chatId: "c1", fromMe: false, kind: "text", body: "Got it. Amount's hidden on the explorer too. Wild.", time: "10:44", sig: sig("f6") },
   { id: "m7", chatId: "c2", fromMe: false, kind: "text", body: "Burner is ready. Same time tomorrow?", time: "09:12", sig: sig("g7") },
   { id: "m8", chatId: "c3", fromMe: false, kind: "text", body: "Draft looks good, shipping tonight", time: "08:03", sig: sig("h8") },
 ];

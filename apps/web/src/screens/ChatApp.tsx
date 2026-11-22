@@ -98,7 +98,7 @@ function PrivacyPanel({ onClose }: { onClose: () => void }) {
   const rows = [
     { icon: Lock, title: "Content is encrypted", body: "Messages are sealed end-to-end before they leave your device. Only the recipient can open them." },
     { icon: EyeOff, title: "Connections are hidden", body: "Each message goes to a one-time inbox, so observers can't see who you talk to." },
-    { icon: Server, title: "Relayer pays gas", body: "Pispt's relayer submits and pays for transactions — your wallet never appears as the fee payer." },
+    { icon: Server, title: "Relayer pays gas", body: "Pispt's relayer submits and pays for transactions, so your wallet never appears as the fee payer." },
     { icon: Coins, title: "Payments hide amounts", body: "Helius Privacy Rings hide how much you send. Deposits into and withdrawals from the ring are still public." },
     { icon: Info, title: "Your IP address", body: "Pispt never logs or stores IPs. Turn on Mixnet mode to hide your IP from our servers entirely." },
   ];

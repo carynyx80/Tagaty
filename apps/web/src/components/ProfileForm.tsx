@@ -48,7 +48,7 @@ export default function ProfileForm({
   useEffect(() => {
     const name = username.trim();
     if (!name) { setStatus({ state: "idle" }); return; }
-    if (!USERNAME_RE.test(name)) { setStatus({ state: "bad", reason: "3–20 characters: a–z, 0–9 or _" }); return; }
+    if (!USERNAME_RE.test(name)) { setStatus({ state: "bad", reason: "3 to 20 characters: lowercase letters, numbers or _" }); return; }
     setStatus({ state: "checking" });
     let live = true;
     const t = setTimeout(async () => {
@@ -56,7 +56,7 @@ export default function ProfileForm({
         const r = await api.checkUsername(name);
         if (live) setStatus(r.available ? { state: "ok" } : { state: "bad", reason: r.reason ?? "Not available" });
       } catch {
-        if (live) setStatus({ state: "bad", reason: "Couldn't check availability — is the relayer running?" });
+        if (live) setStatus({ state: "bad", reason: "Couldn't check availability. Please try again." });
       }
     }, 400);
     return () => { live = false; clearTimeout(t); };
@@ -141,7 +141,7 @@ export default function ProfileForm({
           {status.state === "bad" && <span className="grid h-5 w-5 place-items-center rounded-full bg-red-500/80 text-white"><X size={12} strokeWidth={3} /></span>}
         </div>
         <p className={`mt-1.5 text-xs ${status.state === "bad" ? "text-red-400" : status.state === "ok" ? "text-accent" : "text-white/45"}`}>
-          {status.state === "ok" ? "Available" : status.state === "bad" ? status.reason : status.state === "checking" ? "Checking availability…" : "Lowercase letters, numbers and _ · 3–20 characters"}
+          {status.state === "ok" ? "Available" : status.state === "bad" ? status.reason : status.state === "checking" ? "Checking availability…" : "Lowercase letters, numbers and _ · 3 to 20 characters"}
         </p>
       </div>
 

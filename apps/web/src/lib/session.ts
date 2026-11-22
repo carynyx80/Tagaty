@@ -118,9 +118,9 @@ export async function getSigner(): Promise<Signer & AppSigner> {
   if (signer && signer.publicKey === s.wallet) return signer;
   if (s.kind === "wallet") {
     const w = listWallets().find((x) => x.name === s.walletName);
-    if (!w) throw new Error(`${s.walletName ?? "Wallet"} not found — reconnect`);
+    if (!w) throw new Error(`${s.walletName ?? "Wallet"} not found. Please reconnect.`);
     const sg = await standardSigner(w, true).catch(() => standardSigner(w));
-    if (sg.publicKey !== s.wallet) throw new Error("Wallet account changed — reconnect");
+    if (sg.publicKey !== s.wallet) throw new Error("Wallet account changed. Please reconnect.");
     signer = sg;
     return sg;
   }

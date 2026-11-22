@@ -50,7 +50,7 @@ export const mockApi: PrimarApi = {
   async checkUsername(raw) {
     await delay(250);
     const name = raw.trim().toLowerCase();
-    if (!/^[a-z0-9_]{3,20}$/.test(name)) return { available: false, reason: "3–20 characters: a–z, 0–9 or _" };
+    if (!/^[a-z0-9_]{3,20}$/.test(name)) return { available: false, reason: "3 to 20 characters: lowercase letters, numbers or _" };
     if (RESERVED_USERNAMES.includes(name)) return { available: false, reason: "This username is reserved" };
     const owner = profiles.find((p) => p.username === name);
     if (owner && owner.wallet !== ME.address) return { available: false, reason: "Already taken" };

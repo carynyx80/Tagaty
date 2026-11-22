@@ -135,7 +135,7 @@ export default function PaymentModal({
               <span className="flex items-center gap-1.5"><EyeOff size={12} className="text-accent" /> Private balance</span>
               <button onClick={() => refresh(ctx)} className="flex items-center gap-1 hover:text-fg" disabled={!!busy}><RefreshCw size={11} /> refresh</button>
             </div>
-            <div className="mt-1 font-display text-3xl font-extrabold text-fg">{bal ? `${formatSol(bal.privateLamports)} SOL` : balErr ? "—" : <Loader2 size={20} className="animate-spin" />}</div>
+            <div className="mt-1 font-display text-3xl font-extrabold text-fg">{bal ? `${formatSol(bal.privateLamports)} SOL` : balErr ? "Unavailable" : <Loader2 size={20} className="animate-spin" />}</div>
             {balErr && <div className="mt-1 text-xs text-red-400">{balErr}</div>}
             <div className="mt-1 font-mono text-[10px] text-muted">Rings address {short(ctx.account.owner)}</div>
           </div>

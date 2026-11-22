@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { X, Flame, ExternalLink, Loader2, AlertCircle } from "lucide-react";
+import { X, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 import type { Wallet } from "@wallet-standard/base";
-import { connectWallet, useBurner } from "../lib/session";
+import { connectWallet } from "../lib/session";
 
 export default function WalletPicker({ wallets, onClose, onDone }: { wallets: Wallet[]; onClose: () => void; onDone: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -58,15 +58,6 @@ export default function WalletPicker({ wallets, onClose, onDone }: { wallets: Wa
           </p>
         )}
         {err && <div className="mt-3 flex items-center gap-2 text-xs text-red-400"><AlertCircle size={13} /> {err}</div>}
-        <div className="mt-5 border-t border-line pt-5">
-          <button
-            onClick={() => { useBurner(); onDone(); }}
-            className="flex w-full items-center justify-center gap-2 rounded-full border border-edge px-4 py-3 text-sm font-semibold text-fg transition hover:border-accent/50"
-          >
-            <Flame size={16} className="text-accent" /> Try with burner wallet
-          </button>
-          <p className="mt-2 text-center text-[11px] text-white/45">Burner (testing): a throwaway key stored in this browser.</p>
-        </div>
       </motion.div>
     </motion.div>
   );

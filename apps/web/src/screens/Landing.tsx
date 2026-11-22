@@ -1,9 +1,9 @@
-import { Lock, EyeOff, Fuel, Wallet, Flame, ArrowRight, ShieldAlert, Sparkles } from "lucide-react";
+import { Lock, EyeOff, Fuel, Wallet, ArrowRight, ShieldAlert, Sparkles } from "lucide-react";
 import { motion, type Variants } from "motion/react";
 import { useState, type ReactNode } from "react";
 import type { Wallet as StdWallet } from "@wallet-standard/base";
 import WalletPicker from "../components/WalletPicker";
-import { listWallets, connectWallet, useBurner, hasIdentity } from "../lib/session";
+import { listWallets, connectWallet, hasIdentity } from "../lib/session";
 import { MOCK } from "../api";
 import Logo from "../components/Logo";
 import Pill from "../components/Pill";
@@ -54,7 +54,6 @@ export default function Landing() {
     }
     setPicker(ws);
   };
-  const burner = () => { if (!MOCK) useBurner(); go("onboard"); };
   return (
     <div className="relative min-h-full overflow-x-hidden bg-ink">
       {/* blobs */}
@@ -93,9 +92,6 @@ export default function Landing() {
               <Pill variant="accent" onClick={connect} className="w-full px-8 py-4 text-base sm:w-auto">
                 <Wallet size={18} /> Connect wallet
               </Pill>
-              <Pill variant="ghost" onClick={burner} className="w-full px-8 py-4 text-base sm:w-auto">
-                <Flame size={18} className="text-accent" /> Try with burner wallet
-              </Pill>
             </motion.div>
           </Reveal>
         </section>
@@ -115,7 +111,7 @@ export default function Landing() {
               <h3 className="mt-6 font-display text-4xl font-extrabold sm:text-5xl">End-to-end encrypted</h3>
               <p className="mt-4 max-w-md text-muted">Only you and the people you choose can read a message. Not us, not the relayer, not the chain. Keys are derived in your browser and never leave it.</p>
               <div className="mt-8 space-y-2 font-mono text-xs">
-                <div className="w-fit rounded-xl bg-accent px-4 py-2 text-black">gm — dinner tonight?</div>
+                <div className="w-fit rounded-xl bg-accent px-4 py-2 text-black">gm, dinner tonight?</div>
                 <div className="w-fit rounded-xl border border-line bg-panel-2 px-4 py-2 text-muted">PRM1:AXk9f2Lw…q8Zr0==</div>
               </div>
             </motion.div>
@@ -134,7 +130,7 @@ export default function Landing() {
             <motion.div variants={fadeUp} className="card flex items-center justify-between gap-6 p-8 md:col-span-6">
               <div>
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-accent"><Sparkles size={14} /> Helius Privacy Rings</div>
-                <h3 className="mt-3 font-display text-3xl font-extrabold sm:text-4xl">Private payments on Helius Privacy Rings — amounts encrypted on Solana</h3>
+                <h3 className="mt-3 font-display text-3xl font-extrabold sm:text-4xl">Private payments on Helius Privacy Rings. Amounts encrypted on Solana.</h3>
                 <p className="mt-3 text-sm text-muted">Send SOL or USDC inside a chat. Messages are end-to-end encrypted by Pispt; Rings keep payment amounts hidden on-chain.</p>
               </div>
               <div className="grad-border hidden shrink-0 px-6 py-4 sm:block">
@@ -162,7 +158,7 @@ export default function Landing() {
               {[
                 "What you send stays between you and the people you choose.",
                 "Who you send it to is nobody else's business.",
-                "What you receive — words or money — reveals nothing to onlookers.",
+                "What you receive, words or money, reveals nothing to onlookers.",
                 "Privacy shouldn't cost gas.",
               ].map((b) => (
                 <motion.li variants={fadeUp} key={b} className="flex gap-3 text-fg">

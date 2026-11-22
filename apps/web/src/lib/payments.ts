@@ -207,13 +207,13 @@ async function signWithMainWallet(tx: Transaction, network: string): Promise<Tra
     signature = await signer.sign(Uint8Array.from(tx.messageBytes));
   } else {
     const w: Wallet | undefined = listWallets().find((x) => x.name === s.walletName);
-    if (!w) throw new Error(`${s.walletName ?? "Wallet"} not found — reconnect`);
+    if (!w) throw new Error(`${s.walletName ?? "Wallet"} not found. Please reconnect.`);
     const feat = w.features["solana:signTransaction"] as SignTxFeature | undefined;
     if (!feat) throw new Error(`${w.name} can't sign transactions (no solana:signTransaction)`);
     const connect = w.features["standard:connect"] as ConnectFeature;
     const { accounts } = await connect.connect({ silent: true }).catch(() => connect.connect());
     const account = [...accounts, ...w.accounts].find((a) => kit.getBase58Decoder().decode(new Uint8Array(a.publicKey)) === s.wallet);
-    if (!account) throw new Error("Wallet account changed — reconnect");
+    if (!account) throw new Error("Wallet account changed. Please reconnect.");
     const [out] = await feat.signTransaction({ account, transaction: wire, chain: `solana:${network}` });
     const signed = kit.getTransactionDecoder().decode(out.signedTransaction);
     const same = signed.messageBytes.length === tx.messageBytes.length && signed.messageBytes.every((b, i) => b === tx.messageBytes[i]);

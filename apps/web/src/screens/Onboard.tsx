@@ -52,10 +52,10 @@ export default function Onboard() {
             Sign once to create your <span className="text-grad">private key.</span>
           </h1>
           <p className="mt-5 text-[15px] leading-relaxed text-muted">
-            Your wallet signs a fixed message. Pispt turns that signature into a messaging key — right here in your browser. It never leaves your device.
+            Your wallet signs a fixed message. Pispt turns that signature into a messaging key, right here in your browser. It never leaves your device.
           </p>
           <ul className="mt-6 space-y-3 text-sm text-fg">
-            {["No seed phrase to write down", "Same wallet → same key on any device", "Signing is free — no transaction, no gas"].map((t) => (
+            {["No seed phrase to write down", "Same wallet → same key on any device", "Signing is free: no transaction, no gas"].map((t) => (
               <li key={t} className="flex items-center gap-3">
                 <span className="grid h-5 w-5 place-items-center rounded-full bg-accent text-black"><Check size={12} strokeWidth={3} /></span> {t}
               </li>
