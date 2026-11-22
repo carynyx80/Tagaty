@@ -1,4 +1,4 @@
-import { Lock, EyeOff, Fuel, Wallet, ArrowRight, ShieldAlert, Sparkles } from "lucide-react";
+import { Lock, EyeOff, Fuel, Wallet, ArrowRight, Rocket, ShieldAlert, Sparkles } from "lucide-react";
 import { motion, type Variants } from "motion/react";
 import { useState, type ReactNode } from "react";
 import type { Wallet as StdWallet } from "@wallet-standard/base";
@@ -8,6 +8,8 @@ import { MOCK } from "../api";
 import Logo from "../components/Logo";
 import Pill from "../components/Pill";
 import { go } from "../App";
+import TokenCA from "../components/TokenCA";
+import { PUMPFUN_URL, TOKEN_LIVE } from "../token";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 const fadeUp: Variants = {
@@ -66,6 +68,11 @@ export default function Landing() {
         <Logo />
         <div className="flex items-center gap-2 text-xs">
           <span className="hidden rounded-full border border-accent/50 px-3 py-1 font-semibold text-accent sm:inline">Live on Solana</span>
+          {TOKEN_LIVE && (
+            <a href={PUMPFUN_URL} target="_blank" rel="noreferrer" className="hidden rounded-full bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:bg-accent-soft sm:inline-flex sm:items-center sm:gap-1.5">
+              <Rocket size={14} /> Buy $PISPT
+            </a>
+          )}
           <Pill variant="ghost" onClick={() => (MOCK || hasIdentity() ? go("app") : connect())} className="px-4 py-2 text-sm">
             Open app <ArrowRight size={14} />
           </Pill>
@@ -92,7 +99,17 @@ export default function Landing() {
               <Pill variant="accent" onClick={connect} className="w-full px-8 py-4 text-base sm:w-auto">
                 <Wallet size={18} /> Connect wallet
               </Pill>
+              {TOKEN_LIVE && (
+                <Pill variant="ghost" onClick={() => window.open(PUMPFUN_URL, "_blank", "noopener,noreferrer")} className="w-full px-8 py-4 text-base sm:w-auto">
+                  <Rocket size={18} className="text-accent" /> Buy $PISPT
+                </Pill>
+              )}
             </motion.div>
+            {TOKEN_LIVE && (
+              <motion.div variants={fadeUp} className="mt-5 flex justify-center px-2">
+                <TokenCA />
+              </motion.div>
+            )}
           </Reveal>
         </section>
 
