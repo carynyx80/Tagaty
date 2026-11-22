@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { validateUsername, verifyProfile, type Profile } from "@primar/core";
-import type { JsonDb } from "./db.js";
+import { UsernameTakenError, type Store } from "./db.js";
 
 const MAX_FUTURE_MS = 5 * 60_000;
 const MAX_BATCH = 100;
@@ -16,7 +16,7 @@ function pick(p: any): Profile {
 
 export function registerProfileRoutes(
   app: FastifyInstance,
-  db: JsonDb,
+  db: Store,
   allowWrite: (ip: string) => boolean,
   now: () => number = Date.now,
 ) {
@@ -33,25 +33,28 @@ export function registerProfileRoutes(
     if (profile.updatedAt > now() + MAX_FUTURE_MS) {
       return reply.code(400).send({ error: "updatedAt is too far in the future" });
     }
-    const existing = db.getProfile(profile.wallet);
+    const existing = (await db.getProfileRecord(profile.wallet))?.profile;
     if (existing && profile.updatedAt < existing.updatedAt) {
       return reply.code(400).send({ error: "stale profile (updatedAt older than stored)" });
     }
-    const holder = db.walletForUsername(profile.username);
-    if (holder && holder !== profile.wallet) return reply.code(409).send({ error: "username taken" });
-    await db.putProfile(profile, body.sig);
+    try {
+      await db.putProfile(profile, body.sig);
+    } catch (err) {
+      if (err instanceof UsernameTakenError) return reply.code(409).send({ error: "username taken" });
+      throw err;
+    }
     return { ok: true as const, profile };
   });
 
   app.get<{ Params: { wallet: string } }>("/v1/profile/:wallet", async (req, reply) => {
-    const rec = db.getProfileRecord(req.params.wallet);
+    const rec = await db.getProfileRecord(req.params.wallet);
     if (!rec) return reply.code(404).send({ error: "profile not found" });
     return { profile: rec.profile, sig: rec.sig };
   });
 
   app.get<{ Params: { name: string } }>("/v1/username/:name", async (req, reply) => {
-    const wallet = db.walletForUsername(req.params.name);
-    const rec = wallet ? db.getProfileRecord(wallet) : undefined;
+    const wallet = await db.walletForUsername(req.params.name);
+    const rec = wallet ? await db.getProfileRecord(wallet) : undefined;
     if (!wallet || !rec) return reply.code(404).send({ error: "username not found" });
     return { wallet, profile: rec.profile, sig: rec.sig };
   });
@@ -61,7 +64,7 @@ export function registerProfileRoutes(
     if (!/^[a-z0-9_]*$/.test(name)) return { available: false, reason: "lowercase letters, numbers and _ only" };
     const err = validateUsername(name);
     if (err) return { available: false, reason: err };
-    if (db.walletForUsername(name)) return { available: false, reason: "username taken" };
+    if (await db.walletForUsername(name)) return { available: false, reason: "username taken" };
     return { available: true };
   });
 
@@ -71,7 +74,7 @@ export function registerProfileRoutes(
     const profiles: Profile[] = [];
     const sigs: Record<string, string> = {};
     for (const w of wallets) {
-      const rec = db.getProfileRecord(w);
+      const rec = await db.getProfileRecord(w);
       if (rec) {
         profiles.push(rec.profile);
         sigs[w] = rec.sig;

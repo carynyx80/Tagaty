@@ -12,7 +12,7 @@ process.env.RELAYER_OFFLINE = "1";
 const apps: FastifyInstance[] = [];
 async function make(opts: ServerOptions = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pispt-profiles-"));
-  const app = await buildServer({ offline: true, keypair: Keypair.generate(), dataPath: path.join(dir, "db.json"), ...opts });
+  const app = await buildServer({ offline: true, databaseUrl: null, keypair: Keypair.generate(), dataPath: path.join(dir, "db.json"), ...opts });
   apps.push(app);
   return app;
 }

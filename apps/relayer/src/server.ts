@@ -18,7 +18,9 @@ import {
   redactRpcUrl,
   type Network,
 } from "./config.js";
-import { JsonDb, type MessageItem } from "./db.js";
+import { JsonDb, type Store } from "./db.js";
+import { PgDb } from "./pgdb.js";
+import { IpHasher, logSerializers, makeRateLimiter, getTrustProxy, PRIVACY_INFO } from "./privacy.js";
 import { loadOrCreateKeypair, postMemo, TxTooLargeError } from "./solana.js";
 import { verifyRegistration } from "./verify.js";
 import ringsRoutes from "./routes/rings.js";
@@ -37,7 +39,14 @@ export type ServerOptions = {
   profileRateLimitPerMin?: number;
   dailyCap?: number;
   balanceRefreshMs?: number;
-  logger?: boolean;
+  /** true = default pino logger (IP-free serializers); or a writable stream to capture logs (tests). */
+  logger?: boolean | { stream: NodeJS.WritableStream; level?: string };
+  /** Postgres connection string; defaults to env DATABASE_URL. Pass null to force the JSON store. */
+  databaseUrl?: string | null;
+  /** Explicit storage backend (overrides dataPath/databaseUrl). */
+  store?: Store;
+  /** Fastify trustProxy (default: private proxy hops on Railway, else off; env TRUST_PROXY overrides). */
+  trustProxy?: boolean | string;
 };
 
 export type RelayerContext = {
@@ -51,26 +60,9 @@ export type RelayerContext = {
 declare module "fastify" {
   interface FastifyInstance {
     relayer: RelayerContext;
+    /** Opaque rate-limiter keys currently in memory (for privacy tests). */
+    rateLimitKeys: () => string[];
   }
-}
-
-/** Sliding-window per-key limiter. */
-function makeRateLimiter(limit: number, windowMs: number) {
-  const hits = new Map<string, number[]>();
-  return (key: string): boolean => {
-    const now = Date.now();
-    const arr = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
-    if (arr.length >= limit) {
-      hits.set(key, arr);
-      return false;
-    }
-    arr.push(now);
-    hits.set(key, arr);
-    if (hits.size > 10_000) {
-      for (const [k, v] of hits) if (!v.some((t) => now - t < windowMs)) hits.delete(k);
-    }
-    return true;
-  };
 }
 
 export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInstance> {
@@ -81,11 +73,25 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
   const dailyCap = opts.dailyCap ?? getDailyCap();
   const refreshMs = opts.balanceRefreshMs ?? 60_000;
 
-  const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 64 * 1024 });
+  const loggerOpt = opts.logger ?? false;
+  const app = Fastify({
+    logger:
+      loggerOpt === false
+        ? false
+        : { level: (loggerOpt !== true && loggerOpt.level) || "info", serializers: logSerializers, ...(loggerOpt === true ? {} : { stream: loggerOpt.stream }) },
+    bodyLimit: 64 * 1024,
+    trustProxy: opts.trustProxy ?? getTrustProxy(),
+  });
   await app.register(cors, { origin: true, methods: ["GET", "HEAD", "POST", "PUT", "OPTIONS"] });
   await app.register(websocket);
 
-  const db = new JsonDb(opts.dataPath ?? process.env.DATA_PATH ?? path.join(PKG_DIR, "data", "db.json"));
+  const dataPath = opts.dataPath ?? process.env.DATA_PATH ?? path.join(PKG_DIR, "data", "db.json");
+  const databaseUrl = opts.databaseUrl === undefined ? process.env.DATABASE_URL : opts.databaseUrl;
+  const db: Store =
+    opts.store ??
+    (databaseUrl ? new PgDb(databaseUrl, { importFrom: dataPath, log: app.log }) : new JsonDb(dataPath));
+  await db.init();
+  app.log.info({ store: db.kind }, "storage ready");
 
   let keypair: Keypair;
   if (opts.keypair) keypair = opts.keypair;
@@ -146,12 +152,14 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
   });
   app.addHook("onClose", async () => {
     if (timer) clearInterval(timer);
-    await db.flush();
+    await db.close();
   });
 
   app.decorate("relayer", { keypair, network, connection, getMode: () => mode } satisfies RelayerContext);
 
+  const ipHasher = new IpHasher();
   const limiter = makeRateLimiter(rateLimitPerMin, 60_000);
+  const profileLimiter = makeRateLimiter(opts.profileRateLimitPerMin ?? 10, 60_000);
   let capDay = "";
   let capCount = 0;
   const underDailyCap = () => {
@@ -188,13 +196,13 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
   });
 
   app.get<{ Params: { wallet: string } }>("/v1/keys/:wallet", async (req, reply) => {
-    const rec = db.getRegistration(req.params.wallet);
+    const rec = await db.getRegistration(req.params.wallet);
     if (!rec) return reply.code(404).send({ error: "wallet not registered" });
     return rec;
   });
 
   app.post("/v1/messages", async (req, reply) => {
-    if (!limiter(req.ip)) return reply.code(429).send({ error: `rate limit exceeded (${rateLimitPerMin} messages/min)` });
+    if (!limiter(ipHasher.key(req.ip))) return reply.code(429).send({ error: `rate limit exceeded (${rateLimitPerMin} messages/min)` });
     const envelope = (req.body as any)?.envelope;
     if (typeof envelope !== "string" || !envelope.startsWith("PRM1:")) {
       return reply.code(400).send({ error: "envelope must be a string starting with PRM1:" });
@@ -219,8 +227,7 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
     }
 
     capCount++;
-    const item: MessageItem = { id: db.nextId(), envelope, signature, ts: Date.now() };
-    await db.appendMessage(item);
+    const item = await db.appendMessage({ envelope, signature, ts: Date.now() });
     const payload = JSON.stringify({ type: "message", item });
     for (const client of app.websocketServer.clients) {
       if (client.readyState === 1) client.send(payload);
@@ -231,7 +238,7 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
   app.get<{ Querystring: { since?: string } }>("/v1/messages", async (req) => {
     const s = Number(req.query.since);
     const since = Number.isFinite(s) && s > 0 ? Math.floor(s) : 0;
-    const items = db.listSince(since, 200);
+    const items = await db.listSince(since, 200);
     const cursor = items.length ? items[items.length - 1].id : req.query.since ? String(since) : null;
     return { items, cursor };
   });
@@ -242,7 +249,10 @@ export async function buildServer(opts: ServerOptions = {}): Promise<FastifyInst
     });
   });
 
-  registerProfileRoutes(app, db, makeRateLimiter(opts.profileRateLimitPerMin ?? 10, 60_000));
+  app.get("/v1/privacy", async () => PRIVACY_INFO);
+
+  registerProfileRoutes(app, db, (ip) => profileLimiter(ipHasher.key(ip)));
+  app.decorate("rateLimitKeys", () => [...limiter.keys(), ...profileLimiter.keys()]);
 
   await app.register(ringsRoutes, { prefix: "/v1/rings" });
 

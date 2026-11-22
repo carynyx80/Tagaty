@@ -76,7 +76,13 @@ CORS open. JSON everywhere.
 - `GET  /v1/messages?since=<id>` → `{ items: { id, envelope, signature, ts }[], cursor: string|null }` (ascending, max 200).
 - `WS   /v1/stream` → server pushes `{ type: "message", item: { id, envelope, signature, ts } }`.
 - Rate limit: 120 messages/min per IP (env `MESSAGE_RATE_PER_MIN`; long texts are chunked into many envelopes); `429 { error }`.
-- Storage: simple JSON file `apps/relayer/data/db.json` (fine for MVP).
+- Storage: Postgres when `DATABASE_URL` is set (tables `registrations`, `messages` (bigserial id), `profiles`, `usernames`;
+  idempotent migrations on boot; a legacy `DATA_PATH` db.json is imported once if all tables are empty), otherwise the
+  JSON file `DATA_PATH` (default `apps/relayer/data/db.json`) for local dev/tests. API is identical for both.
+- Privacy: no IP addresses in logs or storage. Request logs carry only method, route pattern and status. Rate-limit
+  keys are `HMAC-SHA256(daily-rotating in-memory secret, ip)`; behind Railway the client IP comes from
+  `X-Forwarded-For` (trusted only from private proxy hops) and is used for rate limiting only.
+- `GET  /v1/privacy` → `{ logsIps: false, storesIps: false, rateLimitKey: "hmac-rotating-daily" }`.
 - **Profiles** (PUBLIC directory data — NOT encrypted; anyone can look up username → wallet, by design for discovery).
   `Profile = { wallet, username, displayName?, bio?, avatar?, updatedAt }` — validated/signed with `@primar/core`
   (`validateProfileFields`, `PROFILE_MESSAGE`, `verifyProfile`, `signProfile`). Rules: `username` required,
@@ -90,7 +96,7 @@ CORS open. JSON everywhere.
   - `GET  /v1/username/:name` → `{ wallet, profile, sig }` | `404 { error }` (start a chat with @username).
   - `GET  /v1/username/:name/available` → `{ available: boolean, reason?: string }` (uppercase/invalid chars → `available:false, reason:"lowercase letters, numbers and _ only"`; not lowercased).
   - `GET  /v1/profiles?wallets=a,b,c` → `{ profiles: Profile[], sigs: Record<wallet, string> }` (max 100 wallets, unknown wallets omitted; >100 → 400).
-  - Stored in `apps/relayer/data/db.json` alongside messages.
+  - Stored in the same store as messages (Postgres or db.json).
 
 ## 3. Rings payments (`@primar/rings` + relayer route `src/routes/rings.ts`)
 
