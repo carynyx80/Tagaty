@@ -6,6 +6,7 @@ import type { PrimarApi, Chat, Message, Profile, Status } from "../api";
 import { setNetwork } from "../api";
 import { getSession, getSigner, setIdentity, disconnect as endSession } from "./session";
 import { sendPaymentEnvelope } from "./payments";
+import { pfetch, streamSupported, onPrivacyModeChange, POLL_INTERVAL_MS } from "./transport";
 
 export const RELAYER: string =
   (import.meta.env.VITE_RELAYER_URL as string | undefined) ??
@@ -21,7 +22,7 @@ export class ApiError extends Error {
 }
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(RELAYER + path, {
+  const res = await pfetch(RELAYER + path, {
     ...init,
     headers: init?.body ? { "content-type": "application/json", ...(init?.headers ?? {}) } : init?.headers,
   });
@@ -136,9 +137,20 @@ async function syncHistory() {
 let ws: WebSocket | null = null;
 let wsWallet: string | null = null;
 let backoff = 1000;
+let poll: ReturnType<typeof setInterval> | null = null;
 function connectStream() {
   const s = getSession();
-  if (!s?.secret || (ws && wsWallet === s.wallet)) return;
+  if (!s?.secret) return;
+  if (!streamSupported()) {
+    // Mixnet mode: a WebSocket would bypass the mixnet and expose the IP, so poll through pfetch instead.
+    if (!poll) {
+      wsWallet = s.wallet;
+      syncHistory().catch(() => {});
+      poll = setInterval(() => { syncHistory().catch(() => {}); }, POLL_INTERVAL_MS);
+    }
+    return;
+  }
+  if (ws && wsWallet === s.wallet) return;
   wsWallet = s.wallet;
   const url = RELAYER.replace(/^http/, "ws") + "/v1/stream";
   const sock = new WebSocket(url);
@@ -164,11 +176,15 @@ function connectStream() {
   };
 }
 function stopStream() {
+  if (poll) { clearInterval(poll); poll = null; }
   const s = ws;
   ws = null;
   wsWallet = null;
   s?.close();
 }
+
+// Switching privacy mode must close any open WebSocket (direct connection) or stop polling.
+onPrivacyModeChange(() => { stopStream(); connectStream(); });
 
 let booted: string | null = null;
 function ensureBoot() {
@@ -194,7 +210,7 @@ function toMessage(m: Stored): Message {
     const p = parsePaymentBody(m.body);
     const token = p?.mint === "SOL" ? "SOL" : "USDC";
     const amount = p ? Number(p.amount) / (token === "SOL" ? 1e9 : 1e6) : 0;
-    return { id: m.id, chatId: m.other, fromMe: m.fromMe, kind: "payment", body: "", amount, token, time: fmtTime(m.ts), sig: m.sig ?? p?.ringsSignature ?? null };
+    return { id: m.id, chatId: m.other, fromMe: m.fromMe, kind: "payment", body: "", amount, token, time: fmtTime(m.ts), sig: p?.ringsSignature ?? m.sig ?? null };
   }
   return { id: m.id, chatId: m.other, fromMe: m.fromMe, kind: "text", body: m.body, time: fmtTime(m.ts), sig: m.sig };
 }

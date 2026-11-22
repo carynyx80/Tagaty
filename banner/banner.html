@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,500;0,700;0,800;1,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1500px;height:600px;overflow:hidden;background:#050505}
+.b{position:relative;width:1500px;height:600px;background:#050505;color:#fff;font-family:Inter,system-ui,sans-serif;overflow:hidden}
+.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px);background-size:60px 60px;mask-image:radial-gradient(ellipse at 30% 50%,#000 30%,transparent 80%)}
+.glow{position:absolute;left:40px;top:50%;width:620px;height:620px;transform:translateY(-50%);background:radial-gradient(circle,rgba(139,255,22,.16),transparent 62%)}
+.logo{position:absolute;left:70px;top:50%;width:470px;height:470px;transform:translateY(-50%);mix-blend-mode:screen;-webkit-mask-image:radial-gradient(circle,#000 52%,transparent 70%);mask-image:radial-gradient(circle,#000 52%,transparent 70%)}
+.logo img{width:100%;height:100%;object-fit:cover;transform:scale(1.35)}
+.txt{position:absolute;left:560px;right:70px;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center}
+.name{font-family:'Inter Tight',sans-serif;font-weight:800;font-size:150px;line-height:.9;letter-spacing:-.045em}
+.name span{color:#8BFF16}
+.tag{font-family:'Inter Tight',sans-serif;font-weight:700;font-size:54px;letter-spacing:-.03em;margin-top:22px;line-height:1.05}
+.tag em{color:#8BFF16;font-style:italic;font-weight:800}
+.sub{font-size:25px;color:rgba(255,255,255,.62);margin-top:18px;font-weight:500;letter-spacing:-.005em}
+.row{display:flex;align-items:center;gap:18px;margin-top:34px}
+.pill{display:inline-flex;align-items:center;gap:12px;background:#8BFF16;color:#050505;font-weight:700;font-size:24px;padding:14px 26px;border-radius:999px;box-shadow:0 0 28px rgba(139,255,22,.25)}
+.dot{width:10px;height:10px;border-radius:50%;background:#050505}
+.url{font-size:24px;font-weight:600;color:#fff;border:1.5px solid #262626;padding:13px 24px;border-radius:999px}
+.bar{position:absolute;left:0;right:0;bottom:0;height:8px;background:#8BFF16}
+</style></head><body>
+<div class="b">
+ <div class="grid"></div><div class="glow"></div>
+ <div class="logo"><img src="logo.jpg"></div>
+ <div class="txt">
+  <div class="name">Pispt<span>.</span></div>
+  <div class="tag">Say anything. Reveal <em>nothing.</em></div>
+  <div class="sub">Gas-free private messaging &amp; payments on Solana</div>
+  <div class="row">
+   <div class="pill"><span class="dot"></span>Powered by Helius Privacy Rings</div>
+   <div class="url">pispt.xyz</div>
+  </div>
+ </div>
+ <div class="bar"></div>
+</div></body></html>

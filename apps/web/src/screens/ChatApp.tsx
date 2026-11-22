@@ -6,6 +6,7 @@ import {
 import Logo from "../components/Logo";
 import ProfileForm from "../components/ProfileForm";
 import PaymentModal from "../components/PaymentModal";
+import PrivacyMode from "../components/PrivacyMode";
 import { go } from "../App";
 import { api, explorerTx, short, type Chat, type Message, type Profile, type Status } from "../api";
 import { getSession } from "../lib/session";
@@ -99,6 +100,7 @@ function PrivacyPanel({ onClose }: { onClose: () => void }) {
     { icon: EyeOff, title: "Connections are hidden", body: "Each message goes to a one-time inbox, so observers can't see who you talk to." },
     { icon: Server, title: "Relayer pays gas", body: "Pispt's relayer submits and pays for transactions — your wallet never appears as the fee payer." },
     { icon: Coins, title: "Payments hide amounts", body: "Helius Privacy Rings hide how much you send. Deposits into and withdrawals from the ring are still public." },
+    { icon: Info, title: "Your IP address", body: "Pispt never logs or stores IPs. Turn on Mixnet mode to hide your IP from our servers entirely." },
   ];
   return (
     <div className="absolute right-4 top-16 z-40 w-80 rounded-[24px] border border-line bg-panel-2/95 p-5 backdrop-blur-xl">
@@ -117,6 +119,7 @@ function PrivacyPanel({ onClose }: { onClose: () => void }) {
           </div>
         ))}
       </div>
+      <PrivacyMode className="mt-4" />
     </div>
   );
 }
