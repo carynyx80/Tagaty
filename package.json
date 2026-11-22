@@ -1,0 +1,19 @@
+{
+  "name": "primar",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w @primar/web",
+    "dev:relayer": "npm run dev -w @primar/relayer",
+    "test": "npm test --workspaces --if-present",
+    "start:relayer": "npm run start -w @primar/relayer",
+    "build:web": "npm run build -w @primar/web"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
